@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.local-browsers/
+
+# Data
+*.csv
+*.log
+
+# Database
+.supabase/
