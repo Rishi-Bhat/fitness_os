@@ -4,6 +4,9 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 from datetime import datetime
 from supabase import create_client, Client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def scrape_hevy_data():
     """
@@ -21,19 +24,55 @@ def scrape_hevy_data():
         page = context.new_page()
 
         print("Navigating to Hevy login...")
-        page.goto("https://www.hevyapp.com/login/")
+        page.goto("https://hevy.com/login", wait_until="networkidle")
         
-        page.fill("input[name='email']", username)
-        page.fill("input[name='password']", password)
-        page.click("button[type='submit']")
+        # Take a screenshot for diagnostics
+        page.screenshot(path="hevy_login_debug.png")
         
-        # Wait for navigation to dashboard
-        page.wait_for_url("https://www.hevyapp.com/dashboard/")
+        try:
+            # Using very simple but effective selectors based on the screenshot
+            # The first input is usually email/username, the second is password
+            page.wait_for_selector("input", timeout=10000)
+            inputs = page.query_selector_all("input")
+            if len(inputs) >= 2:
+                inputs[0].fill(username)
+                inputs[1].fill(password)
+                inputs[1].press("Enter")
+                print("Enter pressed on password field. Waiting for redirection...")
+                time.sleep(10) # Give it more time for potentially slow login
+                page.screenshot(path="hevy_post_login_debug_v2.png")
+                
+                # Check for error message
+                if "Invalid email or password" in page.content():
+                    print("❌ Login failed: Invalid email or password.")
+                    raise Exception("Invalid Hevy credentials")
+            else:
+                raise Exception("Could not find enough input fields")
+        except Exception as e:
+            print(f"Login failed. Page content: {page.content()[:1000]}")
+            page.screenshot(path="hevy_login_error_failed.png")
+            raise e
+        
+        print("Waiting for dashboard/settings...")
+        # After login, we usually land on hevy.com/
+        # Wait for the settings link to appear
+        page.wait_for_selector("a[href='/settings']", timeout=30000)
         print("Logged in successfully.")
 
-        # Navigate to settings/export
-        # Note: Hevy's export is often at https://www.hevyapp.com/settings/export
-        page.goto("https://www.hevyapp.com/settings/export")
+        # Navigate to settings
+        page.goto("https://hevy.com/settings")
+        
+        print("Starting CSV export...")
+        # Search for any button containing "Export" and "Workout"
+        export_button = page.get_by_role("button", name="Export Workout Data")
+        if not export_button.count():
+             export_button = page.locator("button:has-text('Export')")
+        
+        export_button.first.wait_for(state="visible", timeout=15000)
+        
+        with page.expect_download() as download_info:
+            export_button.first.click()
+        download = download_info.value
         
         print("Starting CSV export...")
         # Wait for the download button and trigger it

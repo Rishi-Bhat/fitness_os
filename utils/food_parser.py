@@ -14,8 +14,8 @@ def parse_food_description(description: str) -> Dict[str, Any]:
 
     genai.configure(api_key=api_key)
     
-    # Using 2.0 Flash for speed and efficiency
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    # Using gemini-pro as a last resort
+    model = genai.GenerativeModel("gemini-pro")
     
     prompt = f"""
     Parse the following food description into nutritional macros.

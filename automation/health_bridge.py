@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from supabase import create_client, Client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_google_fit_credentials():
     """
