@@ -125,8 +125,13 @@ with st.sidebar:
             with st.spinner("Syncing Hevy (takes 30-60s)..."):
                 try:
                     scrape_hevy_data()
-                    # Update status
-                    supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                    
+                    # Update status gracefully
+                    try:
+                        supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                    except Exception as pg_err:
+                        print(f"Non-critical error updating sync_logs (likely cache): {pg_err}")
+                        
                     st.success("Hevy synced successfully!")
                     st.rerun()
                 except Exception as e:
@@ -142,7 +147,12 @@ with st.sidebar:
             with st.spinner("Syncing Google Fit..."):
                 try:
                     sync_google_fit_metrics()
-                    supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
+                    
+                    try:
+                        supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
+                    except Exception as pg_err:
+                        print(f"Non-critical error updating sync_logs (likely cache): {pg_err}")
+                        
                     st.success("Google Fit synced successfully!")
                     st.rerun()
                 except Exception as e:
