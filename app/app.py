@@ -145,10 +145,11 @@ with st.sidebar:
     
     # 4. Date Range Filter
     st.subheader("Filter Data")
-    date_filter = st.selectbox(
-        "Date Range",
+    date_filter = st.radio(
+        "Select Time Scale",
         ["Last 7 days", "Last 30 days", "Last 90 days", "All time"],
-        index=1 # Default 30 days
+        index=1,
+        horizontal=True
     )
     
     date_map = {
@@ -158,13 +159,16 @@ with st.sidebar:
         "All time": 9999
     }
     days_back = date_map[date_filter]
-    cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=days_back)
+    cutoff_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=days_back)
     
     # Apply filtering
     if not df_metrics.empty:
         df_metrics = df_metrics[df_metrics['date'] >= cutoff_date]
     if not df_workouts.empty:
         df_workouts = df_workouts[df_workouts['date'] >= cutoff_date]
+    
+    st.divider()
+    st.subheader("Manual Sync")
     
     st.divider()
     st.subheader("Manual Sync")
@@ -197,6 +201,26 @@ with st.sidebar:
                     st.success("Google Fit synced!")
                     st.rerun()
                 except Exception as e: st.error(f"Google Fit Sync failed: {e}")
+
+    st.divider()
+    with st.expander("⚠️ Troubleshooting"):
+        st.caption("If data looks old or missing, try a clean reset:")
+        if st.button("Reset & Full Re-sync (Hevy)", use_container_width=True, type="secondary"):
+            if supabase:
+                with st.spinner("Purging old workouts and re-syncing..."):
+                    try:
+                        # 1. Clear old workout data
+                        supabase.table("workouts").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                        # 2. Run fresh sync
+                        csv_path = scrape_hevy_data()
+                        if csv_path:
+                            data = parse_hevy_csv(csv_path)
+                            sync_to_supabase(data)
+                        supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                        st.success("Full Reset & Sync complete!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Reset failed: {e}")
 
 # --- MAIN TABS ---
 tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
@@ -291,10 +315,11 @@ with tabs[1]:
                     sets_text = " | ".join([f"Set {int(row['set_index'])+1}: {int(row['reps'])}×{row['weight']}kg" for _, row in ex_data.iterrows()])
                     st.caption(sets_text)
                     
-                    # Refined notes rendering
-                    notes = ex_data['notes'].iloc[0] if 'notes' in ex_data.columns and not pd.isna(ex_data['notes'].iloc[0]) and ex_data['notes'].iloc[0] != "" else None
+                    # More visible notes
+                    notes_list = ex_data['notes'].dropna().unique()
+                    notes = notes_list[0] if len(notes_list) > 0 and notes_list[0] != "" else None
                     if notes:
-                        st.markdown(f"*{notes}*")
+                        st.markdown(f"**Note:** *{notes}*")
     else:
         st.info("No workout history found. Sync your Hevy data to see progress.")
 
