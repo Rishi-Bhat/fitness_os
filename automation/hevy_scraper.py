@@ -68,25 +68,69 @@ def scrape_hevy_data():
         print("Logged in successfully.")
 
         # Navigate to settings
-        page.goto("https://hevy.com/settings")
+        print("Navigating to settings...")
+        page.goto("https://hevy.com/settings", wait_until="networkidle")
+        page.screenshot(path="hevy_settings_debug.png")
         
-        print("Starting CSV export...")
-        # Search for any button containing "Export" and "Workout"
-        export_button = page.get_by_role("button", name="Export Workout Data")
-        if not export_button.count():
-             export_button = page.locator("button:has-text('Export')")
+        print("Searching for export options...")
+        # Log available buttons for debugging
+        buttons = page.query_selector_all("button")
+        for i, btn in enumerate(buttons):
+            try:
+                print(f"Button {i}: {btn.inner_text()}")
+            except: pass
+
+        # Hevy export might be behind a "Download" or "Export" text
+        # We try multiple selectors
+        selectors = [
+            "button:has-text('Export Workout Data')",
+            "button:has-text('Export CSV')",
+            "button:has-text('Export')",
+            "text=Export Workout Data",
+            "text=Export Data"
+        ]
         
-        export_button.first.wait_for(state="visible", timeout=15000)
-        
-        with page.expect_download() as download_info:
-            export_button.first.click()
-        download = download_info.value
-        
-        print("Starting CSV export...")
-        # Wait for the download button and trigger it
-        with page.expect_download() as download_info:
-            page.click("button:has-text('Export CSV')")
-        download = download_info.value
+        export_button = None
+        for sel in selectors:
+            try:
+                locator = page.locator(sel)
+                if locator.count() > 0:
+                    export_button = locator.first
+                    print(f"Found export button with selector: {sel}")
+                    break
+            except: continue
+
+        if not export_button:
+            # Maybe it's a link?
+            links = page.query_selector_all("a")
+            for link in links:
+                try:
+                    if "Export" in link.inner_text():
+                        print(f"Found export link: {link.inner_text()}")
+                        export_button = link
+                        break
+                except: pass
+
+        if not export_button:
+            page.screenshot(path="hevy_no_export_button.png")
+            raise Exception("Could not find the Export button on the settings page. See hevy_no_export_button.png for what it looks like.")
+
+        print("Triggering export...")
+        try:
+            with page.expect_download(timeout=60000) as download_info:
+                export_button.click()
+                # If a modal appeared, we might need second click.
+                # Let's check if 'Export CSV' appeared in a modal
+                time.sleep(2)
+                modal_btn = page.locator("button:has-text('Export CSV')").first
+                if modal_btn.count() > 0:
+                    print("Clicking 'Export CSV' in modal...")
+                    modal_btn.click()
+            download = download_info.value
+        except Exception as e:
+            print(f"Download failed or timed out: {e}")
+            page.screenshot(path="hevy_download_error.png")
+            raise e
         
         # Save the file temporarily
         csv_path = "hevy_workouts.csv"
