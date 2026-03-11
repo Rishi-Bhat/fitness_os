@@ -208,6 +208,8 @@ def parse_hevy_csv(csv_path: str):
             set_idx = row.get('set_index')
             if pd.isna(set_idx):
                 set_idx = row.get('Set Number')
+                if not pd.isna(set_idx):
+                    set_idx = int(set_idx) - 1 # Normalize 1-based 'Set Number' to 0-based index
             
             # Map description/notes
             notes = row.get('exercise_notes') or row.get('Notes') or ""
