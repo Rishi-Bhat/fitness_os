@@ -50,21 +50,33 @@ st.markdown("""
 # Supabase Initialization
 @st.cache_resource
 def get_supabase():
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY")
+    # Try getting from environment or streamlit secrets
+    url = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
+    
     if not url or not key:
-        st.error("Missing Supabase credentials in environment variables.")
         return None
-    return create_client(url, key)
+    try:
+        return create_client(url, key)
+    except Exception:
+        return None
 
 supabase = get_supabase()
 
 def load_data():
-    if not supabase: return None, None, None
-    metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
-    food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(50).execute().data
-    workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(100).execute().data
-    return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts)
+    empty_df = pd.DataFrame()
+    if not supabase: 
+        return empty_df, empty_df, empty_df
+    
+    try:
+        metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
+        food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(50).execute().data
+        workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(100).execute().data
+        
+        return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts)
+    except Exception as e:
+        st.error(f"Error fetching data from Supabase: {e}")
+        return empty_df, empty_df, empty_df
 
 df_metrics, df_food, df_workouts = load_data()
 
