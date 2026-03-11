@@ -236,7 +236,7 @@ with tabs[1]:
             d_str = d_dt.strftime('%d %b %Y')
             day_data = df_workouts[df_workouts['date'] == d]
             with st.expander(f"Workout - {d_str} ({day_data['volume_kg'].sum():,.0f} kg)"):
-                exercises = day_data['exercise_name'].unique()
+                exercises = day_data['exercise_name'].unique()[::-1]
                 for ex in exercises:
                     ex_data = day_data[day_data['exercise_name'] == ex].sort_values('set_index')
                     st.markdown(f"**{ex}**")
