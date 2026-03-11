@@ -82,6 +82,9 @@ df_metrics, df_food, df_workouts = load_data()
 
 st.title("Fitness OS — Dashboard")
 
+if not supabase:
+    st.warning("⚠️ **Supabase Configuration Required**: Please set `SUPABASE_URL` and `SUPABASE_KEY` in your environment variables or Streamlit Secrets to see your data.")
+
 tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 
 with tabs[0]:
