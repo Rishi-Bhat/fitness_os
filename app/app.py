@@ -107,7 +107,7 @@ if not supabase:
 with st.sidebar:
     st.header("⚙️ Controls")
     
-    if st.button("🔄 Refresh Dashboard", use_container_width=True):
+    if st.button("🔄 Refresh Dashboard", width="stretch"):
         st.cache_resource.clear()
         st.rerun()
         
@@ -118,7 +118,7 @@ with st.sidebar:
     # Hevy Sync Block
     hevy_last = sync_logs.get('hevy', 'Never')
     st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
-    if st.button("Sync Hevy Workouts", use_container_width=True):
+    if st.button("Sync Hevy Workouts", width="stretch"):
         if not supabase:
             st.error("Supabase not connected.")
         else:
@@ -140,7 +140,7 @@ with st.sidebar:
     # Google Fit Sync Block
     fit_last = sync_logs.get('google_fit', 'Never')
     st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
-    if st.button("Sync Google Fit Data", use_container_width=True):
+    if st.button("Sync Google Fit Data", width="stretch"):
         if not supabase:
             st.error("Supabase not connected.")
         else:

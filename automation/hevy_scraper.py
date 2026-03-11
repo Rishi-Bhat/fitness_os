@@ -117,20 +117,34 @@ def scrape_hevy_data():
 
         print("Triggering export...")
         try:
-            with page.expect_download(timeout=60000) as download_info:
+            # First, try to click the export button and see if it triggers an immediate download
+            with page.expect_download(timeout=5000) as download_info:
                 export_button.click()
-                # If a modal appeared, we might need second click.
-                # Let's check if 'Export CSV' appeared in a modal
-                time.sleep(2)
-                modal_btn = page.locator("button:has-text('Export CSV')").first
-                if modal_btn.count() > 0:
-                    print("Clicking 'Export CSV' in modal...")
-                    modal_btn.click()
             download = download_info.value
-        except Exception as e:
-            print(f"Download failed or timed out: {e}")
-            page.screenshot(path="hevy_download_error.png")
-            raise e
+            print("Download triggered directly.")
+        except Exception:
+            print("No immediate download (modal likely opened). Looking for Export CSV inside modal...")
+            # If it timed out, a modal probably appeared. We look for 'Export CSV' text.
+            try:
+                page.wait_for_selector("text='Export CSV'", timeout=5000)
+            except:
+                pass
+                
+            modal_btn = None
+            for sel in ["button:has-text('Export CSV')", "text='Export CSV'", "button:has-text('Download CSV')"]:
+                loc = page.locator(sel)
+                if loc.count() > 0 and loc.first.is_visible():
+                    modal_btn = loc.first
+                    break
+                    
+            if modal_btn:
+                print("Clicking export button in modal...")
+                with page.expect_download(timeout=60000) as download_info2:
+                    modal_btn.click()
+                download = download_info2.value
+            else:
+                page.screenshot(path="hevy_download_error.png")
+                raise Exception("Failed to find 'Export CSV' button in modal. See hevy_download_error.png.")
         
         # Save the file temporarily
         csv_path = "hevy_workouts.csv"
