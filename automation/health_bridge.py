@@ -103,10 +103,17 @@ def sync_to_supabase(metrics):
         except Exception as e:
             print(f"Error syncing {item['date']}: {e}")
 
+def sync_google_fit_metrics():
+    """
+    Fetches health metrics and syncs them to Supabase.
+    """
+    data = fetch_health_metrics()
+    sync_to_supabase(data)
+    print("Health metrics sync completed.")
+    return data
+
 if __name__ == "__main__":
     try:
-        data = fetch_health_metrics()
-        sync_to_supabase(data)
-        print("Health metrics sync completed.")
+        sync_google_fit_metrics()
     except Exception as e:
         print(f"Failed to fetch health metrics: {e}")
