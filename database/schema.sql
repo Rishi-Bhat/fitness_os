@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS workouts (
     weight DECIMAL(6, 2),
     volume_kg DECIMAL(10, 2),
     hevy_workout_id TEXT, -- To prevent duplicates from Hevy sync
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    set_index INTEGER, -- To distinguish sets within the same exercise
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (hevy_workout_id, exercise_name, set_index)
 );
 
 -- Index for date-based queries
