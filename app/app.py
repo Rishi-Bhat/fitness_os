@@ -128,11 +128,6 @@ if not df_workouts.empty:
 if not df_food.empty:
     df_food['date_only'] = pd.to_datetime(df_food['timestamp']).dt.date
 
-st.title("Fitness OS — Dashboard")
-
-if not supabase:
-    st.warning("⚠️ **Supabase Configuration Required**: Please set `SUPABASE_URL` and `SUPABASE_KEY` in your environment variables or Streamlit Secrets to see your data.")
-
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Controls")
@@ -143,6 +138,30 @@ with st.sidebar:
         
     st.divider()
     
+    # 4. Date Range Filter
+    st.subheader("Filter Data")
+    date_filter = st.selectbox(
+        "Date Range",
+        ["Last 7 days", "Last 30 days", "Last 90 days", "All time"],
+        index=1 # Default 30 days
+    )
+    
+    date_map = {
+        "Last 7 days": 7,
+        "Last 30 days": 30,
+        "Last 90 days": 90,
+        "All time": 9999
+    }
+    days_back = date_map[date_filter]
+    cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=days_back)
+    
+    # Apply filtering
+    if not df_metrics.empty:
+        df_metrics = df_metrics[df_metrics['date'] >= cutoff_date]
+    if not df_workouts.empty:
+        df_workouts = df_workouts[df_workouts['date'] >= cutoff_date]
+    
+    st.divider()
     st.subheader("Manual Sync")
     
     # Hevy Sync Block
@@ -245,7 +264,7 @@ with tabs[1]:
         latest_date = df_workouts['date'].max()
         latest_workout = df_workouts[df_workouts['date'] == latest_date]
         
-        st.subheader(f"Latest Session: {latest_date.strftime('%d %B %Y')}")
+        st.subheader(f"Latest Session: {latest_date.strftime('%d %b %Y')}")
         lcol1, lcol2, lcol3 = st.columns(3)
         lcol1.metric("Exercises", len(latest_workout['exercise_name'].unique()))
         lcol2.metric("Total Sets", len(latest_workout))
@@ -264,10 +283,10 @@ with tabs[1]:
                     sets_text = " | ".join([f"Set {int(row['set_index'])+1}: {int(row['reps'])}×{row['weight']}kg" for _, row in ex_data.iterrows()])
                     st.caption(sets_text)
                     
-                    # Display notes if available
+                    # Refined notes rendering
                     notes = ex_data['notes'].iloc[0] if 'notes' in ex_data.columns and not pd.isna(ex_data['notes'].iloc[0]) and ex_data['notes'].iloc[0] != "" else None
                     if notes:
-                        st.info(f"📝 {notes}")
+                        st.markdown(f"*{notes}*")
     else:
         st.info("No workout history found. Sync your Hevy data to see progress.")
 

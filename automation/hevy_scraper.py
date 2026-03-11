@@ -216,7 +216,7 @@ def parse_hevy_csv(csv_path: str):
             notes = row.get('exercise_notes') or row.get('Notes') or ""
             
             workout_data = {
-                "date": dt_utc.date().isoformat(),
+                "date": dt_utc.strftime('%Y-%m-%d'),
                 "exercise_name": exercise,
                 "sets": 1, 
                 "reps": int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0,
