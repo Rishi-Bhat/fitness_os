@@ -200,28 +200,29 @@ def parse_hevy_csv(csv_path: str):
     workouts = []
     for _, row in df.iterrows():
         try:
-            # Hevy dates are like '11 Mar 2026, 16:42'
-            dt = pd.to_datetime(row['start_time'])
+            # Force to UTC for stable ID generation across different server timezones
+            dt_utc = pd.to_datetime(row['start_time']).tz_localize('UTC') if pd.to_datetime(row['start_time']).tzinfo is None else pd.to_datetime(row['start_time']).tz_convert('UTC')
             
             # Robust column mapping
             exercise = row.get('exercise_title') or row.get('Exercise Name') or 'Unknown'
             set_idx = row.get('set_index')
             if pd.isna(set_idx):
+                # Check for 'Set Number' which is 1-based
                 set_idx = row.get('Set Number')
                 if not pd.isna(set_idx):
-                    set_idx = int(set_idx) - 1 # Normalize 1-based 'Set Number' to 0-based index
+                    set_idx = int(set_idx) - 1
             
             # Map description/notes
             notes = row.get('exercise_notes') or row.get('Notes') or ""
             
             workout_data = {
-                "date": dt.date().isoformat(),
+                "date": dt_utc.date().isoformat(),
                 "exercise_name": exercise,
                 "sets": 1, 
                 "reps": int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0,
                 "weight": float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0,
                 "volume_kg": (float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0) * (int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0),
-                "hevy_workout_id": str(row.get('title', 'Unknown')) + "_" + dt.isoformat(),
+                "hevy_workout_id": str(row.get('title', 'Unknown')) + "_" + dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 "set_index": int(set_idx) if not pd.isna(set_idx) else 0,
                 "notes": notes
             }
