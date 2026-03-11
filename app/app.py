@@ -10,6 +10,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.food_parser import parse_food_description
+from automation.hevy_scraper import scrape_hevy_data
+from automation.health_bridge import sync_google_fit_metrics
 from supabase import create_client, Client
 
 # Page Config
@@ -66,25 +68,75 @@ supabase = get_supabase()
 def load_data():
     empty_df = pd.DataFrame()
     if not supabase: 
-        return empty_df, empty_df, empty_df
+        return empty_df, empty_df, empty_df, {}
     
     try:
         metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
         food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(50).execute().data
         workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(100).execute().data
         
-        return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts)
+        # Load sync logs
+        sync_logs_data = supabase.table("sync_logs").select("*").execute().data
+        sync_logs = {row['source']: row['last_sync'] for row in sync_logs_data}
+        
+        return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts), sync_logs
     except Exception as e:
         st.error(f"Error fetching data from Supabase: {e}")
-        return empty_df, empty_df, empty_df
+        return empty_df, empty_df, empty_df, {}
 
-df_metrics, df_food, df_workouts = load_data()
+df_metrics, df_food, df_workouts, sync_logs = load_data()
 
 st.title("Fitness OS — Dashboard")
 
 if not supabase:
     st.warning("⚠️ **Supabase Configuration Required**: Please set `SUPABASE_URL` and `SUPABASE_KEY` in your environment variables or Streamlit Secrets to see your data.")
 
+# --- SIDEBAR CONTROLS ---
+with st.sidebar:
+    st.header("⚙️ Controls")
+    
+    if st.button("🔄 Refresh Dashboard", use_container_width=True):
+        st.cache_resource.clear()
+        st.rerun()
+        
+    st.divider()
+    
+    st.subheader("Manual Sync")
+    
+    # Hevy Sync Block
+    hevy_last = sync_logs.get('hevy', 'Never')
+    st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
+    if st.button("Sync Hevy Workouts", use_container_width=True):
+        if not supabase:
+            st.error("Supabase not connected.")
+        else:
+            with st.spinner("Syncing Hevy (takes 30-60s)..."):
+                try:
+                    scrape_hevy_data()
+                    # Update status
+                    supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                    st.success("Hevy synced successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Hevy Sync failed: {str(e)}")
+                    
+    # Google Fit Sync Block
+    fit_last = sync_logs.get('google_fit', 'Never')
+    st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
+    if st.button("Sync Google Fit Data", use_container_width=True):
+        if not supabase:
+            st.error("Supabase not connected.")
+        else:
+            with st.spinner("Syncing Google Fit..."):
+                try:
+                    sync_google_fit_metrics()
+                    supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
+                    st.success("Google Fit synced successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Google Fit Sync failed: {str(e)}")
+
+# --- MAIN TABS ---
 tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 
 with tabs[0]:
