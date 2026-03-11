@@ -17,6 +17,14 @@ from supabase import create_client, Client
 # Page Config
 st.set_page_config(page_title="Fitness OS", page_icon="💪", layout="wide")
 
+# Inject Streamlit Secrets into environment for backend scripts
+try:
+    if hasattr(st, "secrets"):
+        for key, value in st.secrets.items():
+            os.environ[key] = str(value)
+except Exception:
+    pass
+
 # Custom CSS for Premium Look
 st.markdown("""
 <style>
@@ -75,9 +83,13 @@ def load_data():
         food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(50).execute().data
         workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(100).execute().data
         
-        # Load sync logs
-        sync_logs_data = supabase.table("sync_logs").select("*").execute().data
-        sync_logs = {row['source']: row['last_sync'] for row in sync_logs_data}
+        # Load sync logs gracefully (ignores Supabase schema cache errors on new tables)
+        sync_logs = {}
+        try:
+            sync_logs_data = supabase.table("sync_logs").select("*").execute().data
+            sync_logs = {row['source']: row['last_sync'] for row in sync_logs_data}
+        except Exception as e:
+            st.toast(f"Note: Sync status currently unavailable ({str(e)[:30]}...)")
         
         return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts), sync_logs
     except Exception as e:
