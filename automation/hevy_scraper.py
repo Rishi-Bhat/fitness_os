@@ -58,10 +58,16 @@ def scrape_hevy_data():
             raise e
         
         print("Waiting for dashboard/settings...")
-        # After login, we usually land on hevy.com/
-        # Wait for the settings link to appear
-        page.wait_for_selector("a[href='/settings']", timeout=30000)
-        print("Logged in successfully.")
+        # After login, we usually land on hevy.com/home or hevy.com/workouts
+        try:
+            page.wait_for_url("**/home*", timeout=30000)
+            print("Logged in successfully (home).")
+        except Exception:
+            try:
+                page.wait_for_url("**/workouts*", timeout=15000)
+                print("Logged in successfully (workouts).")
+            except Exception:
+                print("URL did not change cleanly. Proceeding blindly...")
 
         # Navigate to settings
         print("Navigating to settings...")
@@ -183,25 +189,26 @@ def parse_hevy_csv(csv_path: str):
     """
     df = pd.read_csv(csv_path)
     
-    # Hevy CSV format typically includes columns like: 
-    # 'Date', 'Workout Name', 'Exercise Name', 'Set Order', 'Weight', 'Reps', 'RPE', 'Distance', 'Seconds', 'Notes', 'Workout Notes'
-    # We'll map these to our schema
+    # New columns: 'title','start_time','end_time','description','exercise_title','superset_id','exercise_notes','set_index','set_type','weight_kg','reps','distance_km','duration_seconds','rpe'
     
     workouts = []
     for _, row in df.iterrows():
-        # Hevy dates are usually like '2023-11-01 18:30:22'
-        dt = pd.to_datetime(row['Date'])
-        
-        workout_data = {
-            "date": dt.date().isoformat(),
-            "exercise_name": row['Exercise Name'],
-            "sets": 1, # We'll treat each row as a set entry
-            "reps": int(row['Reps']) if not pd.isna(row['Reps']) else 0,
-            "weight": float(row['Weight']) if not pd.isna(row['Weight']) else 0,
-            "volume_kg": (float(row['Weight']) if not pd.isna(row['Weight']) else 0) * (int(row['Reps']) if not pd.isna(row['Reps']) else 0),
-            "hevy_workout_id": row.get('Workout Name', 'Unknown') + "_" + dt.isoformat()
-        }
-        workouts.append(workout_data)
+        try:
+            # Hevy dates are like '11 Mar 2026, 16:42'
+            dt = pd.to_datetime(row['start_time'])
+            
+            workout_data = {
+                "date": dt.date().isoformat(),
+                "exercise_name": row.get('exercise_title', 'Unknown'),
+                "sets": 1, # We'll treat each row as a set entry
+                "reps": int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0,
+                "weight": float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0,
+                "volume_kg": (float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0) * (int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0),
+                "hevy_workout_id": str(row.get('title', 'Unknown')) + "_" + dt.isoformat()
+            }
+            workouts.append(workout_data)
+        except Exception as e:
+            print(f"Skipping unparseable row: {e}")
         
     return workouts
 
