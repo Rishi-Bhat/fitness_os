@@ -17,8 +17,8 @@ def parse_food_description(description: str, retries: int = 3) -> Dict[str, Any]
 
     genai.configure(api_key=api_key)
     
-    # Using 1.5 Flash to bypass 2.0 quota limits
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    # Using gemini-1.5-flash-latest to bypass 404 API version errors
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
     
     prompt = f"""
     Parse the following food description into nutritional macros.

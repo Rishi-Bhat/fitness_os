@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.food_parser import parse_food_description
-from automation.hevy_scraper import scrape_hevy_data
+from automation.hevy_scraper import scrape_hevy_data, parse_hevy_csv, sync_to_supabase
 from automation.health_bridge import sync_google_fit_metrics
 from supabase import create_client, Client
 
@@ -140,7 +140,10 @@ with st.sidebar:
         else:
             with st.spinner("Syncing Hevy (takes 30-60s)..."):
                 try:
-                    scrape_hevy_data()
+                    csv_path = scrape_hevy_data()
+                    if csv_path:
+                        data = parse_hevy_csv(csv_path)
+                        sync_to_supabase(data)
                     
                     # Update status gracefully
                     try:
@@ -194,13 +197,13 @@ with tabs[0]:
         fig_weight = px.line(df_metrics, x="date", y="weight", title="Body Weight Over Time",
                             color_discrete_sequence=["#1f6feb"])
         fig_weight.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_weight, use_container_width=True)
+        st.plotly_chart(fig_weight, width="stretch")
         
         # Steps Chart
         fig_steps = px.bar(df_metrics, x="date", y="steps", title="Daily Steps",
                           color_discrete_sequence=["#238636"])
         fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_steps, use_container_width=True)
+        st.plotly_chart(fig_steps, width="stretch")
     else:
         st.info("No metric data found. Sync your Google Fit data to see trends.")
 
@@ -216,7 +219,7 @@ with tabs[1]:
         
         # Recent History Table
         st.dataframe(df_workouts[['date', 'exercise_name', 'sets', 'reps', 'weight', 'volume_kg']], 
-                    use_container_width=True, hide_index=True)
+                    width="stretch", hide_index=True)
         
         # Exercise Progression
         selected_exercise = st.selectbox("Select Exercise to Track", df_workouts['exercise_name'].unique())
@@ -225,7 +228,7 @@ with tabs[1]:
         fig_ex = px.line(ex_df, x="date", y="weight", title=f"{selected_exercise} Progress",
                         color_discrete_sequence=["#8957e5"])
         fig_ex.update_layout(template="plotly_dark")
-        st.plotly_chart(fig_ex, use_container_width=True)
+        st.plotly_chart(fig_ex, width="stretch")
     else:
         st.info("No workouts found. Sync your Hevy data to see progress.")
 
@@ -270,10 +273,10 @@ with tabs[2]:
         fig_nutrition = px.bar(daily_food, x="timestamp", y=["protein", "carbs", "fat"], 
                               title="Daily Macros", barmode="stack")
         fig_nutrition.update_layout(template="plotly_dark")
-        st.plotly_chart(fig_nutrition, use_container_width=True)
+        st.plotly_chart(fig_nutrition, width="stretch")
         
         st.subheader("Recent Food Logs")
         st.dataframe(df_food[['timestamp', 'description', 'calories', 'protein', 'carbs', 'fat']], 
-                    use_container_width=True, hide_index=True)
+                    width="stretch", hide_index=True)
     else:
         st.info("No food logs found. Start logging above!")
