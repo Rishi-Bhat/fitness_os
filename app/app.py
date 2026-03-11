@@ -55,7 +55,23 @@ st.markdown("""
         text-align: center;
     }
 </style>
+</style>
 """, unsafe_allow_html=True)
+
+# Install Playwright Browsers Once
+@st.cache_resource
+def install_playwright():
+    try:
+        print("Ensuring Playwright browser is installed (cached)...")
+        import subprocess
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+        return True
+    except Exception as e:
+        print(f"Failed to install Playwright: {e}")
+        return False
+
+# Trigger installation on startup
+install_playwright()
 
 # Supabase Initialization
 @st.cache_resource

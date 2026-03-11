@@ -13,12 +13,8 @@ def scrape_hevy_data():
     """
     Logs into Hevy web dashboard, downloads the CSV export, and returns the parsed data.
     """
-    # Ensure Playwright browser is installed synchronously
-    print("Ensuring Playwright browser is installed...")
-    try:
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install Playwright browsers: {e}")
+    # Playwright installation is now handled globally in app.py to avoid 
+    # downloading it on every button click.
 
     username = os.environ.get("HEVY_USERNAME")
     password = os.environ.get("HEVY_PASSWORD")
