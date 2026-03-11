@@ -264,7 +264,7 @@ with tabs[1]:
                     sets_text = " | ".join([f"Set {int(row['set_index'])+1}: {int(row['reps'])}×{row['weight']}kg" for _, row in ex_data.iterrows()])
                     st.caption(sets_text)
     else:
-        st.info("No workout history found.")nd. Sync your Hevy data to see progress.")
+        st.info("No workout history found. Sync your Hevy data to see progress.")
 
 with tabs[2]:
     st.header("Nutrition Tracking")
