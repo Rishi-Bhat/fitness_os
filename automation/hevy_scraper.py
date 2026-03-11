@@ -203,16 +203,25 @@ def parse_hevy_csv(csv_path: str):
             # Hevy dates are like '11 Mar 2026, 16:42'
             dt = pd.to_datetime(row['start_time'])
             
+            # Robust column mapping
+            exercise = row.get('exercise_title') or row.get('Exercise Name') or 'Unknown'
+            set_idx = row.get('set_index')
+            if pd.isna(set_idx):
+                set_idx = row.get('Set Number')
+            
+            # Map description/notes
+            notes = row.get('exercise_notes') or row.get('Notes') or ""
+            
             workout_data = {
                 "date": dt.date().isoformat(),
-                "exercise_name": row.get('exercise_title', 'Unknown'),
-                "sets": 1, # We'll treat each row as a set entry
+                "exercise_name": exercise,
+                "sets": 1, 
                 "reps": int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0,
                 "weight": float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0,
                 "volume_kg": (float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0) * (int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0),
                 "hevy_workout_id": str(row.get('title', 'Unknown')) + "_" + dt.isoformat(),
-                "set_index": int(row['set_index']) if 'set_index' in row and not pd.isna(row['set_index']) else 0,
-                "notes": row.get('exercise_notes') if 'exercise_notes' in row and not pd.isna(row['exercise_notes']) else ""
+                "set_index": int(set_idx) if not pd.isna(set_idx) else 0,
+                "notes": notes
             }
             workouts.append(workout_data)
         except Exception as e:

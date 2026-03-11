@@ -97,7 +97,7 @@ def load_data():
     try:
         metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
         food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(100).execute().data
-        workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(1000).execute().data
+        workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(3000).execute().data
         
         # Load sync logs gracefully (ignores Supabase schema cache errors on new tables)
         sync_logs = {}
