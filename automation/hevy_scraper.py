@@ -117,34 +117,61 @@ def scrape_hevy_data():
 
         print("Triggering export...")
         try:
-            # First, try to click the export button and see if it triggers an immediate download
-            with page.expect_download(timeout=5000) as download_info:
-                export_button.click()
-            download = download_info.value
-            print("Download triggered directly.")
-        except Exception:
-            print("No immediate download (modal likely opened). Looking for Export CSV inside modal...")
-            # If it timed out, a modal probably appeared. We look for 'Export CSV' text.
-            try:
-                page.wait_for_selector("text='Export CSV'", timeout=5000)
-            except:
-                pass
-                
-            modal_btn = None
-            for sel in ["button:has-text('Export CSV')", "text='Export CSV'", "button:has-text('Download CSV')"]:
-                loc = page.locator(sel)
-                if loc.count() > 0 and loc.first.is_visible():
-                    modal_btn = loc.first
+            # First attempt: Try primary export buttons directly
+            direct_success = False
+            for btn_loc in export_button.locator("..").locator("button").all() if export_button else []:
+                try:
+                    with page.expect_download(timeout=5000) as download_info:
+                        btn_loc.click()
+                    download = download_info.value
+                    direct_success = True
                     break
+                except Exception:
+                    pass
                     
-            if modal_btn:
-                print("Clicking export button in modal...")
-                with page.expect_download(timeout=60000) as download_info2:
-                    modal_btn.click()
-                download = download_info2.value
-            else:
-                page.screenshot(path="hevy_download_error.png")
-                raise Exception("Failed to find 'Export CSV' button in modal. See hevy_download_error.png.")
+            if not direct_success:
+                try:
+                    with page.expect_download(timeout=5000) as download_info:
+                        export_button.click()
+                    download = download_info.value
+                    direct_success = True
+                except Exception:
+                    pass
+
+            # Second attempt: If a modal opened, click aggressively
+            if not direct_success:
+                print("No immediate download. Assume modal opened. Searching for confirmation button...")
+                time.sleep(2) # Wait for modal animation
+                
+                # Get all buttons on the page that are visible
+                all_buttons = page.locator("button").all()
+                download_found = False
+                
+                # Check from the bottom of the DOM (modals usually append)
+                for btn in reversed(all_buttons):
+                    try:
+                        if not btn.is_visible(): continue
+                        text = btn.inner_text().strip().lower()
+                        if text in ["cancel", "close", "back", "no"]: continue
+                        
+                        print(f"Trying modal button: '{text}'...")
+                        with page.expect_download(timeout=10000) as d_info:
+                            btn.click()
+                        download = d_info.value
+                        download_found = True
+                        print("Download triggered successfully by modal button!")
+                        break
+                    except Exception:
+                        continue
+                        
+                if not download_found:
+                    page.screenshot(path="hevy_download_error.png")
+                    raise Exception("Aggressive button scan failed to trigger download.")
+                    
+        except Exception as e:
+            print(f"Export logic sequence failed: {e}")
+            page.screenshot(path="hevy_fatal_error.png")
+            raise e
         
         # Save the file temporarily
         csv_path = "hevy_workouts.csv"
