@@ -37,5 +37,11 @@ CREATE TABLE IF NOT EXISTS workouts (
 );
 
 -- Index for date-based queries
-CREATE INDEX idx_workouts_date ON workouts(date);
-CREATE INDEX idx_food_logs_timestamp ON food_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
+CREATE INDEX IF NOT EXISTS idx_food_logs_timestamp ON food_logs(timestamp);
+
+-- Table for tracking manual and automated syncs
+CREATE TABLE IF NOT EXISTS sync_logs (
+    source TEXT PRIMARY KEY, -- 'hevy' or 'google_fit'
+    last_sync TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
