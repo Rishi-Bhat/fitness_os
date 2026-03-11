@@ -2,6 +2,7 @@ import os
 import time
 import pandas as pd
 from playwright.sync_api import sync_playwright
+import subprocess
 from datetime import datetime
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -12,6 +13,13 @@ def scrape_hevy_data():
     """
     Logs into Hevy web dashboard, downloads the CSV export, and returns the parsed data.
     """
+    # Ensure Playwright browser is installed synchronously
+    print("Ensuring Playwright browser is installed...")
+    try:
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install Playwright browsers: {e}")
+
     username = os.environ.get("HEVY_USERNAME")
     password = os.environ.get("HEVY_PASSWORD")
     
