@@ -231,14 +231,21 @@ def sync_to_supabase(workouts):
 
     supabase: Client = create_client(url, key)
     
-    print(f"Syncing {len(workouts)} sets to Supabase...")
-    for workout in workouts:
-        # Use upsert with a unique constraint if possible, or just insert
-        # For this demo, we'll use a simple insert or check for existence
+    if not workouts:
+        print("No workouts to sync.")
+        return
+
+    print(f"Syncing {len(workouts)} sets to Supabase (Batched)...")
+    
+    # Batch size of 100 is safe and fast
+    batch_size = 100
+    for i in range(0, len(workouts), batch_size):
+        batch = workouts[i:i + batch_size]
         try:
-            supabase.table("workouts").upsert(workout, on_conflict="hevy_workout_id, exercise_name, set_index").execute()
+            supabase.table("workouts").upsert(batch, on_conflict="hevy_workout_id, exercise_name, set_index").execute()
+            print(f"Synced batch {i//batch_size + 1}")
         except Exception as e:
-            print(f"Error syncing row: {e}")
+            print(f"Error syncing batch: {e}")
 
 if __name__ == "__main__":
     try:
