@@ -210,25 +210,76 @@ with tabs[0]:
 with tabs[1]:
     st.header("Workout Progress")
     if not df_workouts.empty:
-        # Weekly Volume
+        # Data Processing
         df_workouts['date'] = pd.to_datetime(df_workouts['date'])
-        recent_workouts = df_workouts[df_workouts['date'] > (datetime.now() - timedelta(days=7))]
-        weekly_volume = recent_workouts['volume_kg'].sum()
         
-        st.subheader(f"Total Weekly Volume: {weekly_volume:,.0f} kg")
+        # Latest Workout Highlight
+        latest_date = df_workouts['date'].max()
+        latest_workout = df_workouts[df_workouts['date'] == latest_date]
         
-        # Recent History Table
-        st.dataframe(df_workouts[['date', 'exercise_name', 'sets', 'reps', 'weight', 'volume_kg']], 
-                    width="stretch", hide_index=True)
+        st.subheader(f"Latest Workout — {latest_date.strftime('%d %B %Y')}")
+        lcol1, lcol2, lcol3 = st.columns(3)
+        with lcol1:
+            st.metric("Exercises", len(latest_workout['exercise_name'].unique()))
+        with lcol2:
+            st.metric("Total Sets", len(latest_workout))
+        with lcol3:
+            st.metric("Total Volume", f"{latest_workout['volume_kg'].sum():,.0f} kg")
+        st.divider()
+
+        # Workout History (Expanders)
+        st.subheader("🗓 Workout History")
+        # Group by date and sort descending
+        dates = sorted(df_workouts['date'].unique(), reverse=True)
+        for d in dates:
+            d_dt = pd.to_datetime(d)
+            d_str = d_dt.strftime('%d %b %Y')
+            day_data = df_workouts[df_workouts['date'] == d]
+            with st.expander(f"Workout - {d_str} ({day_data['volume_kg'].sum():,.0f} kg)"):
+                exercises = day_data['exercise_name'].unique()
+                for ex in exercises:
+                    ex_data = day_data[day_data['exercise_name'] == ex].sort_values('set_index')
+                    st.markdown(f"**{ex}**")
+                    sets_text = "  |  ".join([f"Set {int(row['set_index'])+1 if pd.notna(row['set_index']) else i+1}: {int(row['reps'])} × {row['weight']}kg" for i, (_, row) in enumerate(ex_data.iterrows())])
+                    st.caption(sets_text)
+        
+        st.divider()
         
         # Exercise Progression
-        selected_exercise = st.selectbox("Select Exercise to Track", df_workouts['exercise_name'].unique())
+        st.subheader("📈 Exercise Progress")
+        selected_exercise = st.selectbox("Select Exercise to Track", sorted(df_workouts['exercise_name'].unique()))
         ex_df = df_workouts[df_workouts['exercise_name'] == selected_exercise].sort_values('date')
         
-        fig_ex = px.line(ex_df, x="date", y="weight", title=f"{selected_exercise} Progress",
-                        color_discrete_sequence=["#8957e5"])
-        fig_ex.update_layout(template="plotly_dark")
+        fig_ex = px.line(ex_df, x="date", y="weight", title=f"{selected_exercise} Progress (Max Weight)",
+                        color_discrete_sequence=["#8957e5"], markers=True)
+        fig_ex.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_ex, width="stretch")
+
+        # Weekly Volume
+        st.subheader("📊 Weekly Training Volume")
+        df_workouts['week'] = df_workouts['date'].dt.isocalendar().week
+        df_workouts['year'] = df_workouts['date'].dt.isocalendar().year
+        weekly_df = df_workouts.groupby(['year', 'week'])['volume_kg'].sum().reset_index()
+        weekly_df['week_label'] = weekly_df['year'].astype(str) + " - W" + weekly_df['week'].astype(str)
+        
+        fig_vol = px.bar(weekly_df, x="week_label", y="volume_kg", title="Volume per Week",
+                        color_discrete_sequence=["#238636"])
+        fig_vol.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig_vol, width="stretch")
+
+        # Training Stats
+        st.divider()
+        st.subheader("🏆 Training Stats")
+        s_col1, s_col2, s_col3, s_col4 = st.columns(4)
+        with s_col1:
+            st.metric("Total Workouts", len(df_workouts['date'].unique()))
+        with s_col2:
+            st.metric("Total Volume", f"{df_workouts['volume_kg'].sum():,.0f} kg")
+        with s_col3:
+            st.metric("Avg Workout Volume", f"{df_workouts.groupby('date')['volume_kg'].sum().mean():,.0f} kg")
+        with s_col4:
+            most_freq = df_workouts['exercise_name'].mode()[0] if not df_workouts.empty else "N/A"
+            st.metric("Most Frequent", most_freq)
     else:
         st.info("No workouts found. Sync your Hevy data to see progress.")
 
