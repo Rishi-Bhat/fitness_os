@@ -240,6 +240,14 @@ with tabs[0]:
 
 with tabs[1]:
     st.header("Workout History")
+    
+    # Debug Helper
+    if st.sidebar.checkbox("Show Debug Workout Data"):
+        st.write(f"Fetched {len(df_workouts)} rows")
+        if not df_workouts.empty:
+            st.write(f"Columns: {list(df_workouts.columns)}")
+            st.dataframe(df_workouts.head(20))
+            
     if not df_workouts.empty:
         # Latest Workout Highlight
         latest_date = df_workouts['date'].max()
