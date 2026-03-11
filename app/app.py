@@ -128,6 +128,11 @@ if not df_workouts.empty:
 if not df_food.empty:
     df_food['date_only'] = pd.to_datetime(df_food['timestamp']).dt.date
 
+st.title("Fitness OS — Dashboard")
+
+if not supabase:
+    st.warning("⚠️ **Supabase Configuration Required**: Please set `SUPABASE_URL` and `SUPABASE_KEY` in your environment variables or Streamlit Secrets to see your data.")
+
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Controls")
@@ -224,6 +229,7 @@ with tabs[0]:
             fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight_rolling'], name="7d Avg", line=dict(color="#8957e5", width=3)))
             fig_weight.update_layout(title="Weight Trend (kg)", template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig_weight.update_xaxes(tickformat="%d %b")
             st.plotly_chart(fig_weight, use_container_width=True)
 
             # 2. Calories vs Weight
@@ -248,11 +254,13 @@ with tabs[0]:
                 protein_daily = df_food.groupby('date_only')['protein'].sum().reset_index()
                 fig_prot = px.line(protein_daily, x="date_only", y="protein", title="Protein Intake (g)", color_discrete_sequence=["#8957e5"])
                 fig_prot.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig_prot.update_xaxes(tickformat="%d %b")
                 st.plotly_chart(fig_prot, use_container_width=True)
 
         # 5. Steps Chart
         fig_steps = px.bar(df_metrics, x="date", y="steps", title="Daily Steps Activity", color_discrete_sequence=["#238636"])
         fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        fig_steps.update_xaxes(tickformat="%d %b")
         st.plotly_chart(fig_steps, use_container_width=True)
     else:
         st.info("No analytics data yet. Sync your data to see trends!")
