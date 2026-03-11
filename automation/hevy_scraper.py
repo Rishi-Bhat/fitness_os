@@ -211,7 +211,8 @@ def parse_hevy_csv(csv_path: str):
                 "weight": float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0,
                 "volume_kg": (float(row['weight_kg']) if 'weight_kg' in row and not pd.isna(row['weight_kg']) else 0) * (int(row['reps']) if 'reps' in row and not pd.isna(row['reps']) else 0),
                 "hevy_workout_id": str(row.get('title', 'Unknown')) + "_" + dt.isoformat(),
-                "set_index": int(row['set_index']) if 'set_index' in row and not pd.isna(row['set_index']) else 0
+                "set_index": int(row['set_index']) if 'set_index' in row and not pd.isna(row['set_index']) else 0,
+                "notes": row.get('exercise_notes') if 'exercise_notes' in row and not pd.isna(row['exercise_notes']) else ""
             }
             workouts.append(workout_data)
         except Exception as e:

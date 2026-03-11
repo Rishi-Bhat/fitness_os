@@ -96,8 +96,8 @@ def load_data():
     
     try:
         metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
-        food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(50).execute().data
-        workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(100).execute().data
+        food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(100).execute().data
+        workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(1000).execute().data
         
         # Load sync logs gracefully (ignores Supabase schema cache errors on new tables)
         sync_logs = {}
@@ -263,6 +263,11 @@ with tabs[1]:
                     st.markdown(f"**{ex}**")
                     sets_text = " | ".join([f"Set {int(row['set_index'])+1}: {int(row['reps'])}×{row['weight']}kg" for _, row in ex_data.iterrows()])
                     st.caption(sets_text)
+                    
+                    # Display notes if available
+                    notes = ex_data['notes'].iloc[0] if 'notes' in ex_data.columns and not pd.isna(ex_data['notes'].iloc[0]) and ex_data['notes'].iloc[0] != "" else None
+                    if notes:
+                        st.info(f"📝 {notes}")
     else:
         st.info("No workout history found. Sync your Hevy data to see progress.")
 
