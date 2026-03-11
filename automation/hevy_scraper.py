@@ -23,12 +23,12 @@ def scrape_hevy_data():
         raise ValueError("HEVY_USERNAME or HEVY_PASSWORD not set")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=['--disable-blink-features=AutomationControlled'])
         context = browser.new_context()
         page = context.new_page()
 
         print("Navigating to Hevy login...")
-        page.goto("https://hevy.com/login", wait_until="networkidle")
+        page.goto("https://hevy.com/login", wait_until="domcontentloaded")
         
         # Take a screenshot for diagnostics
         page.screenshot(path="hevy_login_debug.png")
@@ -58,22 +58,28 @@ def scrape_hevy_data():
             raise e
         
         print("Waiting for dashboard/settings...")
-        # After login, we usually land on hevy.com/home or hevy.com/workouts
+        # Since Hevy redirects to '/', waiting for /home or /workouts times out.
+        # Instead, wait for a navigation to finish or just check for the side menu.
         try:
-            page.wait_for_url("**/home*", timeout=30000)
-            print("Logged in successfully (home).")
+            page.wait_for_selector('a[href="/settings"]', timeout=15000)
+            print("Logged in successfully, side menu rendered.")
         except Exception:
-            try:
-                page.wait_for_url("**/workouts*", timeout=15000)
-                print("Logged in successfully (workouts).")
-            except Exception:
-                print("URL did not change cleanly. Proceeding blindly...")
+            print("Side menu not detected. Proceeding blindly...")
 
         # Navigate to settings
         print("Navigating to settings...")
-        page.goto("https://hevy.com/settings", wait_until="networkidle")
+        page.goto("https://hevy.com/settings", wait_until="domcontentloaded")
         page.screenshot(path="hevy_settings_debug.png")
         
+        # Wait for the "Export Workout Data" button block to render, ignoring the "Loading..." state.
+        try:
+            page.wait_for_selector("text=Export Workout Data", timeout=20000)
+        except:
+            try:
+                page.wait_for_selector("text=Export Data", timeout=5000)
+            except:
+                pass
+
         print("Searching for export options...")
         # Log available buttons for debugging
         buttons = page.query_selector_all("button")
