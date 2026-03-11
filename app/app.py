@@ -114,6 +114,20 @@ def load_data():
 
 df_metrics, df_food, df_workouts, sync_logs = load_data()
 
+# --- DATA PRE-PROCESSING ---
+if not df_metrics.empty:
+    df_metrics['date'] = pd.to_datetime(df_metrics['date'])
+    df_metrics = df_metrics.sort_values('date')
+    df_metrics['weight_rolling'] = df_metrics['weight'].rolling(window=7).mean()
+
+if not df_workouts.empty:
+    df_workouts['date'] = pd.to_datetime(df_workouts['date'])
+    df_workouts['week'] = df_workouts['date'].dt.isocalendar().week
+    df_workouts['year'] = df_workouts['date'].dt.isocalendar().year
+
+if not df_food.empty:
+    df_food['date_only'] = pd.to_datetime(df_food['timestamp']).dt.date
+
 st.title("Fitness OS — Dashboard")
 
 if not supabase:
@@ -123,7 +137,7 @@ if not supabase:
 with st.sidebar:
     st.header("⚙️ Controls")
     
-    if st.button("🔄 Refresh Dashboard", width="stretch"):
+    if st.button("🔄 Refresh Dashboard", use_container_width=True):
         st.cache_resource.clear()
         st.rerun()
         
@@ -134,154 +148,123 @@ with st.sidebar:
     # Hevy Sync Block
     hevy_last = sync_logs.get('hevy', 'Never')
     st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
-    if st.button("Sync Hevy Workouts", width="stretch"):
-        if not supabase:
-            st.error("Supabase not connected.")
-        else:
-            with st.spinner("Syncing Hevy (takes 30-60s)..."):
+    if st.button("Sync Hevy Workouts", use_container_width=True):
+        if supabase:
+            with st.spinner("Syncing Hevy (30-60s)..."):
                 try:
                     csv_path = scrape_hevy_data()
                     if csv_path:
                         data = parse_hevy_csv(csv_path)
                         sync_to_supabase(data)
-                    
-                    # Update status gracefully
-                    try:
-                        supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
-                    except Exception as pg_err:
-                        print(f"Non-critical error updating sync_logs (likely cache): {pg_err}")
-                        
-                    st.success("Hevy synced successfully!")
+                    supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                    st.success("Hevy synced!")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Hevy Sync failed: {str(e)}")
+                except Exception as e: st.error(f"Hevy Sync failed: {e}")
                     
     # Google Fit Sync Block
     fit_last = sync_logs.get('google_fit', 'Never')
     st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
-    if st.button("Sync Google Fit Data", width="stretch"):
-        if not supabase:
-            st.error("Supabase not connected.")
-        else:
+    if st.button("Sync Google Fit Data", use_container_width=True):
+        if supabase:
             with st.spinner("Syncing Google Fit..."):
                 try:
                     sync_google_fit_metrics()
-                    
-                    try:
-                        supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
-                    except Exception as pg_err:
-                        print(f"Non-critical error updating sync_logs (likely cache): {pg_err}")
-                        
-                    st.success("Google Fit synced successfully!")
+                    supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
+                    st.success("Google Fit synced!")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Google Fit Sync failed: {str(e)}")
+                except Exception as e: st.error(f"Google Fit Sync failed: {e}")
 
 # --- MAIN TABS ---
 tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 
 with tabs[0]:
-    st.header("Daily Health Trends")
+    st.header("Analytics Hub")
     if not df_metrics.empty:
-        col1, col2, col3 = st.columns(3)
-        latest = df_metrics.iloc[0]
+        latest = df_metrics.iloc[-1]
         
-        with col1:
-            st.metric("Latest Weight", f"{latest['weight']} kg")
-        with col2:
-            st.metric("Steps Today", f"{latest['steps']}")
-        with col3:
-            st.metric("Body Fat", f"{latest['body_fat_pct']}%")
+        # 4-Column Metric Row
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Weight", f"{latest['weight']} kg")
+        m2.metric("Steps", f"{int(latest['steps'])}")
+        
+        # Pull calorie/protein from food logs for "Today"
+        today = datetime.now().date()
+        daily_food = df_food[df_food['date_only'] == today] if not df_food.empty else pd.DataFrame()
+        
+        m3.metric("Calories", f"{daily_food['calories'].sum():,.0f} kcal" if not daily_food.empty else "0 kcal")
+        m4.metric("Protein", f"{daily_food['protein'].sum():,.0f} g" if not daily_food.empty else "0 g")
+        
+        st.divider()
 
-        # Weight Chart
-        fig_weight = px.line(df_metrics, x="date", y="weight", title="Body Weight Over Time",
-                            color_discrete_sequence=["#1f6feb"])
-        fig_weight.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_weight, width="stretch")
-        
-        # Steps Chart
-        fig_steps = px.bar(df_metrics, x="date", y="steps", title="Daily Steps",
-                          color_discrete_sequence=["#238636"])
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # 1. Weight Trend
+            fig_weight = go.Figure()
+            fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight'], name="Daily", mode='markers+lines', line=dict(color="#1f6feb", width=1)))
+            fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight_rolling'], name="7d Avg", line=dict(color="#8957e5", width=3)))
+            fig_weight.update_layout(title="Weight Trend (kg)", template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig_weight, use_container_width=True)
+
+            # 2. Calories vs Weight
+            if not df_food.empty:
+                food_daily = df_food.groupby('date_only')['calories'].sum().reset_index()
+                merged = pd.merge(df_metrics, food_daily, left_on='date', right_on='date_only', how='left')
+                fig_cvw = px.scatter(merged, x="calories", y="weight", title="Calories vs Weight", trendline="ols", color_discrete_sequence=["#238636"])
+                fig_cvw.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_cvw, use_container_width=True)
+
+        with col2:
+            # 3. Weekly Volume
+            if not df_workouts.empty:
+                weekly_df = df_workouts.groupby(['year', 'week'])['volume_kg'].sum().reset_index()
+                weekly_df['label'] = "W" + weekly_df['week'].astype(str)
+                fig_vol = px.bar(weekly_df, x="label", y="volume_kg", title="Weekly Volume (kg)", color_discrete_sequence=["#238636"])
+                fig_vol.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_vol, use_container_width=True)
+
+            # 4. Protein Intake Trend
+            if not df_food.empty:
+                protein_daily = df_food.groupby('date_only')['protein'].sum().reset_index()
+                fig_prot = px.line(protein_daily, x="date_only", y="protein", title="Protein Intake (g)", color_discrete_sequence=["#8957e5"])
+                fig_prot.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_prot, use_container_width=True)
+
+        # 5. Steps Chart
+        fig_steps = px.bar(df_metrics, x="date", y="steps", title="Daily Steps Activity", color_discrete_sequence=["#238636"])
         fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_steps, width="stretch")
+        st.plotly_chart(fig_steps, use_container_width=True)
     else:
-        st.info("No metric data found. Sync your Google Fit data to see trends.")
+        st.info("No analytics data yet. Sync your data to see trends!")
 
 with tabs[1]:
-    st.header("Workout Progress")
+    st.header("Workout History")
     if not df_workouts.empty:
-        # Data Processing
-        df_workouts['date'] = pd.to_datetime(df_workouts['date'])
-        
         # Latest Workout Highlight
         latest_date = df_workouts['date'].max()
         latest_workout = df_workouts[df_workouts['date'] == latest_date]
         
-        st.subheader(f"Latest Workout — {latest_date.strftime('%d %B %Y')}")
+        st.subheader(f"Latest Session: {latest_date.strftime('%d %B %Y')}")
         lcol1, lcol2, lcol3 = st.columns(3)
-        with lcol1:
-            st.metric("Exercises", len(latest_workout['exercise_name'].unique()))
-        with lcol2:
-            st.metric("Total Sets", len(latest_workout))
-        with lcol3:
-            st.metric("Total Volume", f"{latest_workout['volume_kg'].sum():,.0f} kg")
+        lcol1.metric("Exercises", len(latest_workout['exercise_name'].unique()))
+        lcol2.metric("Total Sets", len(latest_workout))
+        lcol3.metric("Volume", f"{latest_workout['volume_kg'].sum():,.0f} kg")
         st.divider()
 
         # Workout History (Expanders)
-        st.subheader("🗓 Workout History")
-        # Group by date and sort descending
         dates = sorted(df_workouts['date'].unique(), reverse=True)
         for d in dates:
             d_dt = pd.to_datetime(d)
-            d_str = d_dt.strftime('%d %b %Y')
             day_data = df_workouts[df_workouts['date'] == d]
-            with st.expander(f"Workout - {d_str} ({day_data['volume_kg'].sum():,.0f} kg)"):
-                exercises = day_data['exercise_name'].unique()[::-1]
-                for ex in exercises:
+            with st.expander(f"Workout - {d_dt.strftime('%d %b %Y')} ({day_data['volume_kg'].sum():,.0f} kg)"):
+                for ex in day_data['exercise_name'].unique()[::-1]:
                     ex_data = day_data[day_data['exercise_name'] == ex].sort_values('set_index')
                     st.markdown(f"**{ex}**")
-                    sets_text = "  |  ".join([f"Set {int(row['set_index'])+1 if pd.notna(row['set_index']) else i+1}: {int(row['reps'])} × {row['weight']}kg" for i, (_, row) in enumerate(ex_data.iterrows())])
+                    sets_text = " | ".join([f"Set {int(row['set_index'])+1}: {int(row['reps'])}×{row['weight']}kg" for _, row in ex_data.iterrows()])
                     st.caption(sets_text)
-        
-        st.divider()
-        
-        # Exercise Progression
-        st.subheader("📈 Exercise Progress")
-        selected_exercise = st.selectbox("Select Exercise to Track", sorted(df_workouts['exercise_name'].unique()))
-        ex_df = df_workouts[df_workouts['exercise_name'] == selected_exercise].sort_values('date')
-        
-        fig_ex = px.line(ex_df, x="date", y="weight", title=f"{selected_exercise} Progress (Max Weight)",
-                        color_discrete_sequence=["#8957e5"], markers=True)
-        fig_ex.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_ex, width="stretch")
-
-        # Weekly Volume
-        st.subheader("📊 Weekly Training Volume")
-        df_workouts['week'] = df_workouts['date'].dt.isocalendar().week
-        df_workouts['year'] = df_workouts['date'].dt.isocalendar().year
-        weekly_df = df_workouts.groupby(['year', 'week'])['volume_kg'].sum().reset_index()
-        weekly_df['week_label'] = weekly_df['year'].astype(str) + " - W" + weekly_df['week'].astype(str)
-        
-        fig_vol = px.bar(weekly_df, x="week_label", y="volume_kg", title="Volume per Week",
-                        color_discrete_sequence=["#238636"])
-        fig_vol.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_vol, width="stretch")
-
-        # Training Stats
-        st.divider()
-        st.subheader("🏆 Training Stats")
-        s_col1, s_col2, s_col3, s_col4 = st.columns(4)
-        with s_col1:
-            st.metric("Total Workouts", len(df_workouts['date'].unique()))
-        with s_col2:
-            st.metric("Total Volume", f"{df_workouts['volume_kg'].sum():,.0f} kg")
-        with s_col3:
-            st.metric("Avg Workout Volume", f"{df_workouts.groupby('date')['volume_kg'].sum().mean():,.0f} kg")
-        with s_col4:
-            most_freq = df_workouts['exercise_name'].mode()[0] if not df_workouts.empty else "N/A"
-            st.metric("Most Frequent", most_freq)
     else:
-        st.info("No workouts found. Sync your Hevy data to see progress.")
+        st.info("No workout history found.")nd. Sync your Hevy data to see progress.")
 
 with tabs[2]:
     st.header("Nutrition Tracking")
