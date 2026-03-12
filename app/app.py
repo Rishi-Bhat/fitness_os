@@ -98,21 +98,21 @@ def load_data():
         metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
         food = supabase.table("food_logs").select("*").order("timestamp", desc=True).limit(100).execute().data
         workouts = supabase.table("workouts").select("*").order("date", desc=True).limit(3000).execute().data
+        weight_history = supabase.table("weight_measurements").select("*").order("timestamp", desc=True).limit(100).execute().data
         
-        # Load sync logs gracefully (ignores Supabase schema cache errors on new tables)
+        # Load sync logs gracefully
         sync_logs = {}
         try:
             sync_logs_data = supabase.table("sync_logs").select("*").execute().data
             sync_logs = {row['source']: row['last_sync'] for row in sync_logs_data}
-        except Exception as e:
-            st.toast(f"Note: Sync status currently unavailable ({str(e)[:30]}...)")
+        except Exception: pass
         
-        return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts), sync_logs
+        return pd.DataFrame(metrics), pd.DataFrame(food), pd.DataFrame(workouts), pd.DataFrame(weight_history), sync_logs
     except Exception as e:
         st.error(f"Error fetching data from Supabase: {e}")
-        return empty_df, empty_df, empty_df, {}
+        return empty_df, empty_df, empty_df, empty_df, {}
 
-df_metrics, df_food, df_workouts, sync_logs = load_data()
+df_metrics, df_food, df_workouts, df_weight_history, sync_logs = load_data()
 
 # --- DATA PRE-PROCESSING ---
 if not df_metrics.empty:
@@ -127,6 +127,9 @@ if not df_workouts.empty:
 
 if not df_food.empty:
     df_food['date_only'] = pd.to_datetime(df_food['timestamp']).dt.date
+
+if not df_weight_history.empty:
+    df_weight_history['timestamp'] = pd.to_datetime(df_weight_history['timestamp'])
 
 st.title("Fitness OS — Dashboard")
 
@@ -227,36 +230,60 @@ tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 
 with tabs[0]:
     st.header("Analytics Hub")
+    
+    # 1. Scale Status & Metric Cards
     if not df_metrics.empty:
-        # Sort by date to get latest
-        latest_df = df_metrics.sort_values('date', ascending=True)
-        latest = latest_df.iloc[-1]
+        latest_summary = df_metrics.sort_values('date').iloc[-1]
         
-        # Check if latest weight is today
-        is_today = latest['date'].date() == datetime.now().date()
-        status_color = "normal" if is_today else "off"
-        
-        # Scale Status Box
-        st.info(f"⚖️ **Scale Status**: Last weigh-in detected on {latest['date'].strftime('%d %b %Y')} at {latest['weight']} kg.")
-        
+        # Get latest raw measurement for status card
+        if not df_weight_history.empty:
+            latest_raw = df_weight_history.iloc[0]
+            last_ts = latest_raw['timestamp']
+            
+            # Format "Today 15:30" or "Yesterday 15:30"
+            if last_ts.date() == datetime.now().date():
+                ts_label = f"Today {last_ts.strftime('%H:%M')}"
+            elif last_ts.date() == (datetime.now() - timedelta(days=1)).date():
+                ts_label = f"Yesterday {last_ts.strftime('%H:%M')}"
+            else:
+                ts_label = last_ts.strftime('%d %b %H:%M')
+                
+            st.info(f"⚖️ **Last Scale Measurement**: {latest_raw['weight']} kg ({ts_label})")
+        else:
+            st.info(f"⚖️ **Scale Status**: Last summary on {latest_summary['date'].strftime('%d %b %Y')} at {latest_summary['weight']} kg.")
+
         # 4-Column Metric Row
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Weight", f"{latest['weight']} kg")
-        m2.metric("Steps", f"{int(latest['steps'])}")
+        m1.metric("Current Weight", f"{latest_summary['weight']} kg")
+        m2.metric("Steps", f"{int(latest_summary['steps'])}")
         
-        # Pull calorie/protein from food logs for "Today"
         today = datetime.now().date()
         daily_food = df_food[df_food['date_only'] == today] if not df_food.empty else pd.DataFrame()
-        
         m3.metric("Calories", f"{daily_food['calories'].sum():,.0f} kcal" if not daily_food.empty else "0 kcal")
         m4.metric("Protein", f"{daily_food['protein'].sum():,.0f} g" if not daily_food.empty else "0 g")
         
+        # --- Weight History Viewer ---
+        with st.expander("📉 View Weight History & Trends"):
+            if not df_weight_history.empty:
+                hcol1, hcol2 = st.columns([1, 1])
+                with hcol1:
+                    st.write("Recent Measurements")
+                    st.dataframe(df_weight_history[['timestamp', 'weight']].head(10), hide_index=True, use_container_width=True)
+                with hcol2:
+                    st.write("Weight Precision Trend")
+                    fig_raw = px.line(df_weight_history, x='timestamp', y='weight', color_discrete_sequence=["#1f6feb"])
+                    fig_raw.update_layout(template="plotly_dark", height=300, margin=dict(t=0, b=0, l=0, r=0))
+                    st.plotly_chart(fig_raw, use_container_width=True)
+            else:
+                st.write("No historical data available yet.")
+
         st.divider()
 
+        # --- High Level Charts ---
         col1, col2 = st.columns(2)
 
         with col1:
-            # 1. Weight Trend
+            # 1. Weight Trend (Summary)
             fig_weight = go.Figure()
             fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight'], name="Daily", mode='markers+lines', line=dict(color="#1f6feb", width=1)))
             fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight_rolling'], name="7d Avg", line=dict(color="#8957e5", width=3)))
@@ -274,7 +301,7 @@ with tabs[0]:
                 st.plotly_chart(fig_cvw, use_container_width=True)
 
         with col2:
-            # 3. Weekly Volume
+            # 3. Weekly Volume (Moved from Training)
             if not df_workouts.empty:
                 weekly_df = df_workouts.groupby(['year', 'week'])['volume_kg'].sum().reset_index()
                 weekly_df['label'] = "W" + weekly_df['week'].astype(str)
