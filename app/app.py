@@ -302,33 +302,88 @@ with tabs[0]:
     # 1. Scale Status & Metric Cards
     if not df_metrics.empty:
         latest_summary = df_metrics.sort_values('date').iloc[-1]
+        prev_summary = df_metrics.sort_values('date').iloc[-2] if len(df_metrics) > 1 else latest_summary
         
-        # Get latest raw measurement for status card
-        if not df_weight_history.empty:
-            latest_raw = df_weight_history.iloc[0]
-            last_ts = latest_raw['timestamp']
-            
-            # Format "Today 15:30" or "Yesterday 15:30"
-            if last_ts.date() == datetime.now().date():
-                ts_label = f"Today {last_ts.strftime('%H:%M')}"
-            elif last_ts.date() == (datetime.now() - timedelta(days=1)).date():
-                ts_label = f"Yesterday {last_ts.strftime('%H:%M')}"
-            else:
-                ts_label = last_ts.strftime('%d %b %H:%M')
-                
-            st.info(f"⚖️ **Last Scale Measurement**: {latest_raw['weight']} kg ({ts_label})")
-        else:
-            st.info(f"⚖️ **Scale Status**: Last summary on {latest_summary['date'].strftime('%d %b %Y')} at {latest_summary['weight']} kg.")
+        weight_delta = latest_summary['weight'] - prev_summary['weight']
+        
+        # --- BADGE ROW ---
+        b1, b2 = st.columns([3, 1])
+        with b2:
+            if not df_weight_history.empty:
+                latest_raw = df_weight_history.iloc[0]
+                last_ts = latest_raw['timestamp']
+                ts_label = "Today" if last_ts.date() == datetime.now().date() else last_ts.strftime('%d %b')
+                st.markdown(f'<div style="text-align: right;"><span class="status-badge">⚖️ {latest_raw["weight"]}kg • {ts_label}</span></div>', unsafe_allow_html=True)
 
-        # 4-Column Metric Row
+        # --- COMMAND CENTER METRICS ---
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Current Weight", f"{latest_summary['weight']} kg")
-        m2.metric("Steps", f"{int(latest_summary['steps'])}")
         
-        today = datetime.now().date()
-        daily_food = df_food[df_food['date_only'] == today] if not df_food.empty else pd.DataFrame()
-        m3.metric("Calories", f"{daily_food['calories'].sum():,.0f} kcal" if not daily_food.empty else "0 kcal")
-        m4.metric("Protein", f"{daily_food['protein'].sum():,.0f} g" if not daily_food.empty else "0 g")
+        with m1:
+            delta_color = "#ff4b4b" if weight_delta > 0 else "#238636"
+            delta_icon = "▲" if weight_delta > 0 else "▼"
+            st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-label">WEIGHT</div>
+                    <div class="metric-value">{latest_summary['weight']} kg</div>
+                    <div class="metric-delta" style="color: {delta_color};">{delta_icon} {abs(weight_delta):.1f} kg</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with m2:
+            steps_goal = 10000
+            steps_pct = min(latest_summary['steps'] / steps_goal, 1.0)
+            st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-label">STEPS</div>
+                    <div class="metric-value">{int(latest_summary['steps']):,}</div>
+                    <div style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; margin-top: 10px;">
+                        <div style="width: {steps_pct*100}%; background: #1f6feb; border-radius: 4px; height: 100%;"></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with m3:
+            cal_goal = 2500
+            today_date = datetime.now().date()
+            daily_food = df_food[df_food['date_only'] == today_date] if not df_food.empty else pd.DataFrame()
+            consumed = daily_food['calories'].sum()
+            left = max(cal_goal - consumed, 0)
+            st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-label">CALORIES LEFT</div>
+                    <div class="metric-value">{int(left):,}</div>
+                    <div style="font-size: 0.7rem; color: #8b949e; margin-top: 4px;">Goal: {cal_goal}</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with m4:
+            prot_goal = 180
+            today_prot = daily_food['protein'].sum() if not daily_food.empty else 0
+            prot_pct = min(today_prot / prot_goal, 1.0)
+            st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-label">PROTEIN</div>
+                    <div class="metric-value">{int(today_prot)} g</div>
+                    <div style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; margin-top: 10px;">
+                        <div style="width: {prot_pct*100}%; background: #8957e5; border-radius: 4px; height: 100%;"></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # --- GOAL COUNTDOWN ---
+        target_weight = 75.0
+        target_date = datetime(2026, 6, 1).date()
+        days_left = (target_date - today_date).days
+        weeks_left = days_left / 7
+        if weeks_left > 0:
+            loss_needed = latest_summary['weight'] - target_weight
+            rate_needed = loss_needed / weeks_left
+            st.markdown(f"""
+                <div style="padding: 12px 20px; background: rgba(137, 87, 229, 0.1); border-radius: 12px; border: 1px solid rgba(137, 87, 229, 0.3); margin: 20px 0; text-align: center;">
+                    <span style="color: #8957e5; font-weight: 600;">📅 Road to 12% Body Fat:</span> 
+                    Lose <b>{rate_needed:.2f} kg/week</b> to hit <b>{target_weight}kg</b> by June.
+                </div>
+            """, unsafe_allow_html=True)
         
         # --- Weight History Viewer ---
         with st.expander("📉 View Weight History & Trends"):
@@ -347,48 +402,63 @@ with tabs[0]:
 
         st.divider()
 
-        # --- High Level Charts ---
+        # --- PREMIUM CHARTS ---
         col1, col2 = st.columns(2)
-
         with col1:
-            # 1. Weight Trend (Summary)
+            # 1. Weight Area Chart with Gradient
             fig_weight = go.Figure()
-            fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight'], name="Daily", mode='markers+lines', line=dict(color="#1f6feb", width=1)))
-            fig_weight.add_trace(go.Scatter(x=df_metrics['date'], y=df_metrics['weight_rolling'], name="7d Avg", line=dict(color="#8957e5", width=3)))
-            fig_weight.update_layout(title="Weight Trend (kg)", template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-            fig_weight.update_xaxes(tickformat="%d %b")
+            fig_weight.add_trace(go.Scatter(
+                x=df_metrics['date'], y=df_metrics['weight'],
+                name="Daily", mode='lines',
+                line=dict(color="#1f6feb", width=2),
+                fill='tozeroy',
+                fillcolor='rgba(31, 111, 235, 0.1)'
+            ))
+            fig_weight.add_trace(go.Scatter(
+                x=df_metrics['date'], y=df_metrics['weight_rolling'],
+                name="Trend", line=dict(color="#8957e5", width=4)
+            ))
+            fig_weight.update_layout(
+                title="Weight Trajectory",
+                template="plotly_dark",
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=40, b=0, l=0, r=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            fig_weight.update_xaxes(tickformat="%d %b", gridcolor="rgba(255,255,255,0.05)")
+            fig_weight.update_yaxes(gridcolor="rgba(255,255,255,0.05)")
             st.plotly_chart(fig_weight, use_container_width=True)
 
-            # 2. Calories vs Weight
+            # 2. Metabolic Efficiency
             if not df_food.empty:
                 food_daily = df_food.groupby('date_only')['calories'].sum().reset_index()
                 merged = pd.merge(df_metrics, food_daily, left_on='date', right_on='date_only', how='left')
-                fig_cvw = px.scatter(merged, x="calories", y="weight", title="Calories vs Weight", trendline="ols", color_discrete_sequence=["#238636"])
-                fig_cvw.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig_cvw = px.scatter(merged, x="calories", y="weight", title="Metabolic Efficiency", trendline="ols", color_discrete_sequence=["#238636"])
+                fig_cvw.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=40))
                 st.plotly_chart(fig_cvw, use_container_width=True)
 
         with col2:
-            # 3. Weekly Volume (Moved from Training)
+            # 3. Training Load Area Chart
             if not df_workouts.empty:
                 weekly_df = df_workouts.groupby(['year', 'week'])['volume_kg'].sum().reset_index()
                 weekly_df['label'] = "W" + weekly_df['week'].astype(str)
-                fig_vol = px.bar(weekly_df, x="label", y="volume_kg", title="Weekly Volume (kg)", color_discrete_sequence=["#238636"])
-                fig_vol.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig_vol = px.area(weekly_df, x="label", y="volume_kg", title="Training Load Evolution", color_discrete_sequence=["#238636"])
+                fig_vol.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=40))
+                fig_vol.update_traces(fillcolor='rgba(35, 134, 54, 0.1)')
                 st.plotly_chart(fig_vol, use_container_width=True)
 
-            # 4. Protein Intake Trend
+            # 4. Protein Intensity
             if not df_food.empty:
                 protein_daily = df_food.groupby('date_only')['protein'].sum().reset_index()
-                fig_prot = px.line(protein_daily, x="date_only", y="protein", title="Protein Intake (g)", color_discrete_sequence=["#8957e5"])
-                fig_prot.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-                fig_prot.update_xaxes(tickformat="%d %b")
+                fig_prot = px.area(protein_daily, x="date_only", y="protein", title="Protein Consistency", color_discrete_sequence=["#8957e5"])
+                fig_prot.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=40))
+                fig_prot.update_traces(fillcolor='rgba(137, 87, 229, 0.1)')
                 st.plotly_chart(fig_prot, use_container_width=True)
 
-        # 5. Steps Chart
-        fig_steps = px.bar(df_metrics, x="date", y="steps", title="Daily Steps Activity", color_discrete_sequence=["#238636"])
-        fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        fig_steps.update_xaxes(tickformat="%d %b")
+        # 5. Daily Movement
+        fig_steps = px.bar(df_metrics, x="date", y="steps", title="Step Intensity", color="steps", color_continuous_scale="Viridis")
+        fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
         st.plotly_chart(fig_steps, use_container_width=True)
     else:
         st.info("No analytics data yet. Sync your data to see trends!")
