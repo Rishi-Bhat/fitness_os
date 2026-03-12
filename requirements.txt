@@ -3,7 +3,9 @@ pandas
 plotly
 supabase
 google-auth-oauthlib
+google-auth
 google-api-python-client
+google-api-core
 playwright
 python-dotenv
 google-generativeai

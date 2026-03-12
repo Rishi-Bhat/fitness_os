@@ -342,7 +342,7 @@ with tabs[0]:
             cal_goal = 2500
             today_date = datetime.now().date()
             daily_food = df_food[df_food['date_only'] == today_date] if not df_food.empty else pd.DataFrame()
-            consumed = daily_food['calories'].sum()
+            consumed = daily_food['calories'].sum() if not daily_food.empty else 0
             left = max(cal_goal - consumed, 0)
             st.markdown(f"""
                 <div class="metric-container">
