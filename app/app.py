@@ -25,36 +25,104 @@ try:
 except Exception:
     pass
 
-# Custom CSS for Premium Look
+# Custom CSS for Premium Glassmorphism Look
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+    
     .main {
-        background-color: #0e1117;
+        background: radial-gradient(circle at top right, #1a1f2e, #0e1117);
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
+    
+    /* Glass Card Style */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 20px;
     }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #161b22;
-        border-radius: 8px 8px 0px 0px;
+    
+    /* Metric Card Customization */
+    .metric-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin: 5px 0;
+    }
+    
+    .metric-label {
+        font-size: 0.85rem;
         color: #8b949e;
-        padding-left: 20px;
-        padding-right: 20px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
+    
+    .metric-delta {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    /* Sidebar Cleanup */
+    [data-testid="stSidebar"] {
+        background-color: #0e1117;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 12px 12px 0 0;
+        padding: 10px 20px;
+        color: #8b949e;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-bottom: none;
+    }
+    
     .stTabs [aria-selected="true"] {
         background-color: #1f6feb !important;
         color: white !important;
     }
-    .metric-card {
-        background-color: #161b22;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #30363d;
-        text-align: center;
+    
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background-color: #1f6feb;
     }
-</style>
+    
+    /* Status Badge */
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        background: rgba(31, 111, 235, 0.15);
+        color: #58a6ff;
+        border: 1px solid rgba(31, 111, 235, 0.3);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -146,13 +214,13 @@ with st.sidebar:
         
     st.divider()
     
-    # 4. Date Range Filter
-    st.subheader("Filter Data")
-    date_filter = st.radio(
-        "Select Time Scale",
+    # --- TIME SCALE PILL ---
+    st.subheader("Time Scale")
+    date_filter = st.selectbox(
+        "Display Range",
         ["Last 7 days", "Last 30 days", "Last 90 days", "All time"],
         index=1,
-        horizontal=True
+        label_visibility="collapsed"
     )
     
     date_map = {
@@ -170,11 +238,11 @@ with st.sidebar:
     if not df_workouts.empty:
         df_workouts = df_workouts[df_workouts['date'] >= cutoff_date]
     
-    st.divider()
-    st.subheader("Manual Sync")
+    st.spacer(height=20) # Custom space
     
-    st.divider()
-    st.subheader("Manual Sync")
+    # --- ADMIN TOOLS EXPANDER ---
+    with st.expander("⚙️ Admin Tools", expanded=False):
+        st.subheader("Manual Sync")
     
     # Hevy Sync Block
     hevy_last = sync_logs.get('hevy', 'Never')
