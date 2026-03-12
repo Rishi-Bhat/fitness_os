@@ -228,7 +228,16 @@ tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 with tabs[0]:
     st.header("Analytics Hub")
     if not df_metrics.empty:
-        latest = df_metrics.iloc[-1]
+        # Sort by date to get latest
+        latest_df = df_metrics.sort_values('date', ascending=True)
+        latest = latest_df.iloc[-1]
+        
+        # Check if latest weight is today
+        is_today = latest['date'].date() == datetime.now().date()
+        status_color = "normal" if is_today else "off"
+        
+        # Scale Status Box
+        st.info(f"⚖️ **Scale Status**: Last weigh-in detected on {latest['date'].strftime('%d %b %Y')} at {latest['weight']} kg.")
         
         # 4-Column Metric Row
         m1, m2, m3, m4 = st.columns(4)
