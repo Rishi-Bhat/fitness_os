@@ -160,7 +160,7 @@ supabase = get_supabase()
 def load_data():
     empty_df = pd.DataFrame()
     if not supabase: 
-        return empty_df, empty_df, empty_df, {}
+        return empty_df, empty_df, empty_df, empty_df, {}
     
     try:
         metrics = supabase.table("daily_metrics").select("*").order("date", desc=True).limit(30).execute().data
@@ -238,43 +238,40 @@ with st.sidebar:
     if not df_workouts.empty:
         df_workouts = df_workouts[df_workouts['date'] >= cutoff_date]
     
-    st.spacer(height=20) # Custom space
-    
     # --- ADMIN TOOLS EXPANDER ---
     with st.expander("⚙️ Admin Tools", expanded=False):
         st.subheader("Manual Sync")
     
-    # Hevy Sync Block
-    hevy_last = sync_logs.get('hevy', 'Never')
-    st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
-    if st.button("Sync Hevy Workouts", use_container_width=True):
-        if supabase:
-            with st.spinner("Syncing Hevy (30-60s)..."):
-                try:
-                    csv_path = scrape_hevy_data()
-                    if csv_path:
-                        data = parse_hevy_csv(csv_path)
-                        sync_to_supabase(data)
-                    supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
-                    st.success("Hevy synced!")
-                    st.rerun()
-                except Exception as e: st.error(f"Hevy Sync failed: {e}")
-                    
-    # Google Fit Sync Block
-    fit_last = sync_logs.get('google_fit', 'Never')
-    st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
-    if st.button("Sync Google Fit Data", use_container_width=True):
-        if supabase:
-            with st.spinner("Syncing Google Fit..."):
-                try:
-                    sync_google_fit_metrics()
-                    supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
-                    st.success("Google Fit synced!")
-                    st.rerun()
-                except Exception as e: st.error(f"Google Fit Sync failed: {e}")
+        # Hevy Sync Block
+        hevy_last = sync_logs.get('hevy', 'Never')
+        st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
+        if st.button("Sync Hevy Workouts", use_container_width=True):
+            if supabase:
+                with st.spinner("Syncing Hevy (30-60s)..."):
+                    try:
+                        csv_path = scrape_hevy_data()
+                        if csv_path:
+                            data = parse_hevy_csv(csv_path)
+                            sync_to_supabase(data)
+                        supabase.table("sync_logs").upsert({"source": "hevy"}).execute()
+                        st.success("Hevy synced!")
+                        st.rerun()
+                    except Exception as e: st.error(f"Hevy Sync failed: {e}")
+                        
+        # Google Fit Sync Block
+        fit_last = sync_logs.get('google_fit', 'Never')
+        st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
+        if st.button("Sync Google Fit Data", use_container_width=True):
+            if supabase:
+                with st.spinner("Syncing Google Fit..."):
+                    try:
+                        sync_google_fit_metrics()
+                        supabase.table("sync_logs").upsert({"source": "google_fit"}).execute()
+                        st.success("Google Fit synced!")
+                        st.rerun()
+                    except Exception as e: st.error(f"Google Fit Sync failed: {e}")
 
-    st.divider()
-    with st.expander("⚠️ Troubleshooting"):
+        st.divider()
         st.caption("If data looks old or missing, try a clean reset:")
         if st.button("Reset & Full Re-sync (Hevy)", use_container_width=True, type="secondary"):
             if supabase:
@@ -299,7 +296,6 @@ tabs = st.tabs(["📊 Overview", "🏋️ Training", "🥗 Nutrition"])
 with tabs[0]:
     st.header("Analytics Hub")
     
-    # 1. Scale Status & Metric Cards
     if not df_metrics.empty:
         latest_summary = df_metrics.sort_values('date').iloc[-1]
         prev_summary = df_metrics.sort_values('date').iloc[-2] if len(df_metrics) > 1 else latest_summary
@@ -386,7 +382,7 @@ with tabs[0]:
             """, unsafe_allow_html=True)
         
         # --- Weight History Viewer ---
-        with st.expander("📉 View Weight History & Trends"):
+        with st.expander("📉 View Detailed Measurements"):
             if not df_weight_history.empty:
                 hcol1, hcol2 = st.columns([1, 1])
                 with hcol1:
@@ -461,7 +457,7 @@ with tabs[0]:
         fig_steps.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
         st.plotly_chart(fig_steps, use_container_width=True)
     else:
-        st.info("No analytics data yet. Sync your data to see trends!")
+        st.info("No data found for this period. Log some metrics to see your progress!")
 
 with tabs[1]:
     st.header("Workout History")
@@ -498,17 +494,18 @@ with tabs[1]:
         st.info("No workout history found. Sync your Hevy data to see progress.")
 
 with tabs[2]:
-    st.header("Nutrition Tracking")
+    st.header("Nutrition Optimizer")
     
-    # Food Parser Input
-    with st.expander("📝 Log Food (Natural Language)", expanded=True):
-        food_text = st.text_input("What did you eat?", placeholder="e.g. 3 scrambled eggs and an avocado toast")
-        if st.button("Parse and Log"):
-            with st.spinner("Analyzing with Gemini..."):
+    n_col1, n_col2 = st.columns([1, 1])
+    
+    with n_col1:
+        st.subheader("📝 Quick Log")
+        food_text = st.text_input("What did you eat?", placeholder="e.g. 3 scrambled eggs and an avocado toast", label_visibility="collapsed")
+        if st.button("Parse with Gemini ✨", use_container_width=True):
+            with st.spinner("Analyzing macros..."):
                 try:
                     macros = parse_food_description(food_text)
                     if "error" not in macros:
-                        # Log to Supabase
                         log_entry = {
                             "description": food_text,
                             "calories": macros['calories'],
@@ -517,31 +514,44 @@ with tabs[2]:
                             "fat": macros['fat']
                         }
                         supabase.table("food_logs").insert(log_entry).execute()
-                        st.success(f"Logged: {macros['calories']} kcal | P: {macros['protein']}g | C: {macros['carbs']}g | F: {macros['fat']}g")
+                        st.success(f"Logged: {macros['calories']} kcal!")
                         st.rerun()
-                    else:
-                        st.error(f"Could not parse: {macros['error']}")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    else: st.error(f"Could parse: {macros['error']}")
+                except Exception as e: st.error(f"Error: {e}")
 
+    with n_col2:
+        st.subheader("🍩 Macro Split")
+        if not df_food.empty:
+            today_data = df_food[df_food['date_only'] == datetime.now().date()]
+            if not today_data.empty:
+                m_sums = today_data[['protein', 'carbs', 'fat']].sum()
+                fig_donut = px.pie(values=m_sums.values, names=m_sums.index, hole=0.5, 
+                                 color_discrete_sequence=["#8957e5", "#1f6feb", "#238636"])
+                fig_donut.update_layout(template="plotly_dark", margin=dict(t=0, b=0, l=0, r=0), height=200, showlegend=True)
+                st.plotly_chart(fig_donut, use_container_width=True)
+            else:
+                st.markdown('<div style="height:200px; display:flex; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius:12px; color:#8b949e;">No calories logged today</div>', unsafe_allow_html=True)
+        else:
+            st.info("Log your first meal to see the breakdown.")
+            
+    st.divider()
+    
     if not df_food.empty:
-        # Daily Summary
-        df_food['timestamp'] = pd.to_datetime(df_food['timestamp']).dt.date
-        daily_food = df_food.groupby('timestamp').agg({
+        st.subheader("Macro consistency")
+        df_food_grouped = df_food.groupby('date_only').agg({
             'calories': 'sum',
             'protein': 'sum',
             'carbs': 'sum',
             'fat': 'sum'
-        }).reset_index().sort_values('timestamp', ascending=False)
+        }).reset_index().sort_values('date_only', ascending=False)
         
-        st.subheader("Daily Macro Trends")
-        fig_nutrition = px.bar(daily_food, x="timestamp", y=["protein", "carbs", "fat"], 
-                              title="Daily Macros", barmode="stack")
-        fig_nutrition.update_layout(template="plotly_dark")
-        st.plotly_chart(fig_nutrition, width="stretch")
+        fig_nut = px.bar(df_food_grouped, x="date_only", y=["protein", "carbs", "fat"], 
+                        title="Daily Macro Consistency", barmode="stack", color_discrete_sequence=["#8957e5", "#1f6feb", "#238636"])
+        fig_nut.update_layout(template="plotly_dark")
+        st.plotly_chart(fig_nut, use_container_width=True)
         
-        st.subheader("Recent Food Logs")
-        st.dataframe(df_food[['timestamp', 'description', 'calories', 'protein', 'carbs', 'fat']], 
-                    width="stretch", hide_index=True)
+        with st.expander("📄 Raw Food Logs"):
+            st.dataframe(df_food[['timestamp', 'description', 'calories', 'protein', 'carbs', 'fat']], 
+                        width="stretch", hide_index=True)
     else:
-        st.info("No food logs found. Start logging above!")
+        st.info("No nutrition history found.")
