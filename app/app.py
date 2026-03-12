@@ -157,6 +157,15 @@ def get_supabase():
 
 supabase = get_supabase()
 
+def format_sync_time(ts_str):
+    if not ts_str or ts_str == 'Never':
+        return 'Never'
+    try:
+        dt = pd.to_datetime(ts_str)
+        return dt.strftime('%d %b, %H:%M')
+    except:
+        return ts_str
+
 def load_data():
     empty_df = pd.DataFrame()
     if not supabase: 
@@ -244,7 +253,7 @@ with st.sidebar:
     
         # Hevy Sync Block
         hevy_last = sync_logs.get('hevy', 'Never')
-        st.caption(f"**Hevy**: Last synced {hevy_last[:16] if hevy_last != 'Never' else hevy_last}")
+        st.caption(f"**Hevy**: Last synced {format_sync_time(hevy_last)}")
         if st.button("Sync Hevy Workouts", use_container_width=True):
             if supabase:
                 with st.spinner("Syncing Hevy (30-60s)..."):
@@ -260,7 +269,7 @@ with st.sidebar:
                         
         # Google Fit Sync Block
         fit_last = sync_logs.get('google_fit', 'Never')
-        st.caption(f"**Google Fit**: Last synced {fit_last[:16] if fit_last != 'Never' else fit_last}")
+        st.caption(f"**Google Fit**: Last synced {format_sync_time(fit_last)}")
         if st.button("Sync Google Fit Data", use_container_width=True):
             if supabase:
                 with st.spinner("Syncing Google Fit..."):
